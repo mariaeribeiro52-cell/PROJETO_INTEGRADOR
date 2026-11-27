@@ -1,6 +1,9 @@
+
 import os
+
 from dotenv import load_dotenv
 load_dotenv()
+
 import streamlit as st
 import mysql.connector
 import bcrypt
@@ -30,16 +33,94 @@ ARQUIVO_LOG = "sistema.log"
 
 
 # =====================================
+# GERENCIADOR DE LOG
+# =====================================
+
+log = GerenciadorLog(
+    arquivo=ARQUIVO_LOG,
+    grupo_cloudwatch="Projeto-Integrador",
+    stream_cloudwatch="supervisorio-python"
+)
+
+
+# =====================================
+# OBJETO SISTEMA
+# =====================================
+
+sistema = Sistema(log)
+
+
+# =====================================
+# VARIÁVEIS DE SESSÃO
+# =====================================
+
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+
+if "usuario" not in st.session_state:
+    st.session_state.usuario = None
+
+if "perfil" not in st.session_state:
+    st.session_state.perfil = None
+
+if "motor_ligado" not in st.session_state:
+    st.session_state.motor_ligado = False
+
+if "velocidade" not in st.session_state:
+    st.session_state.velocidade = 0
+
+if "leituras" not in st.session_state:
+    st.session_state.leituras = []
+
+
+# =====================================
+# REGISTRO DE INICIALIZAÇÃO
+# =====================================
+
+# O Streamlit executa novamente o app
+# em determinadas interações.
+# Registramos a inicialização apenas uma
+# vez por sessão do usuário.
+
+if "inicio_registrado" not in st.session_state:
+
+    log.registrar(
+        "INFO",
+        "Sistema supervisório inicializado."
+    )
+
+    st.session_state.inicio_registrado = True
+
+
+# =====================================
 # CONEXÃO COM MYSQL
 # =====================================
 
 def conectar_banco():
-    return mysql.connector.connect(
+
+    conexao = mysql.connector.connect(
         host=os.getenv("MYSQL_HOST"),
         user=os.getenv("MYSQL_USER"),
         password=os.getenv("MYSQL_PASSWORD"),
         database=os.getenv("MYSQL_DATABASE")
     )
+
+    # Evita repetir a mensagem de conexão
+    # em todos os reruns do Streamlit.
+
+    if not st.session_state.get(
+        "mysql_conexao_registrada",
+        False
+    ):
+
+        log.registrar(
+            "INFO",
+            "Primeira conexão com MySQL da sessão estabelecida."
+        )
+
+        st.session_state.mysql_conexao_registrada = True
+
+    return conexao
 
 
 # =====================================
@@ -117,47 +198,15 @@ def verificar_admin_inicial(conexao):
     conexao.commit()
     cursor.close()
 
+    # Registro local e CloudWatch
+
+    log.registrar(
+        "INFO",
+        f"Administrador inicial criado - usuário: {usuario}"
+    )
+
     print("\nAdministrador criado com sucesso!")
     print("Agora realize o login pelo supervisório.\n")
-
-
-# =====================================
-# GERENCIADOR DE LOG
-# =====================================
-
-log = GerenciadorLog(
-    ARQUIVO_LOG
-)
-
-
-# =====================================
-# OBJETO SISTEMA
-# =====================================
-
-sistema = Sistema(log)
-
-
-# =====================================
-# VARIÁVEIS DE SESSÃO
-# =====================================
-
-if "logado" not in st.session_state:
-    st.session_state.logado = False
-
-if "usuario" not in st.session_state:
-    st.session_state.usuario = None
-
-if "perfil" not in st.session_state:
-    st.session_state.perfil = None
-
-if "motor_ligado" not in st.session_state:
-    st.session_state.motor_ligado = False
-
-if "velocidade" not in st.session_state:
-    st.session_state.velocidade = 0
-
-if "leituras" not in st.session_state:
-    st.session_state.leituras = []
 
 
 # =====================================
@@ -247,57 +296,103 @@ try:
             telas_disponiveis = []
 
 
-        tela = st.sidebar.radio(
-            "Navegação",
-            telas_disponiveis
-        )
-
-
-        st.sidebar.divider()
-
-
         # =================================
-        # LOGOUT
+        # NAVEGAÇÃO
         # =================================
 
-        if st.sidebar.button("Sair"):
+        if telas_disponiveis:
 
-            logout(sistema)
+            tela = st.sidebar.radio(
+                "Navegação",
+                telas_disponiveis
+            )
 
-            st.rerun()
-
-
-        # =================================
-        # CONTROLE DAS TELAS
-        # =================================
-
-        if tela == "Processo":
-
-            tela_processo(sistema)
+            st.sidebar.divider()
 
 
-        elif tela == "Gráficos":
+            # =================================
+            # LOGOUT
+            # =================================
 
-            tela_graficos()
+            if st.sidebar.button("Sair"):
+
+                # O próprio logout registra o evento
+                # por meio do GerenciadorLog.
+
+                logout(sistema)
 
 
-        elif tela == "Monitoramento":
+            # =================================
+            # CONTROLE DAS TELAS
+            # =================================
 
-            tela_monitoramento(
-                sistema,
-                ARQUIVO_LOG
+            if tela == "Processo":
+
+                tela_processo(sistema)
+
+
+            elif tela == "Gráficos":
+
+                tela_graficos()
+
+
+            elif tela == "Monitoramento":
+
+                tela_monitoramento(
+                    sistema,
+                    ARQUIVO_LOG
+                )
+
+
+            elif tela == "Cadastro de usuários":
+
+                tela_cadastro(
+                    sistema,
+                    conexao
+                )
+
+        else:
+
+            st.error(
+                "Perfil de usuário não reconhecido."
             )
 
 
-        elif tela == "Cadastro de usuários":
+# =====================================
+# TRATAMENTO DE ERROS
+# =====================================
 
-            tela_cadastro(
-                sistema,
-                conexao
-            )
+except mysql.connector.Error as erro:
 
+    log.registrar(
+        "ERROR",
+        f"Falha na conexão ou operação MySQL: {type(erro).__name__}"
+    )
+
+    st.error(
+        "Não foi possível acessar o banco de dados."
+    )
+
+
+except Exception as erro:
+
+    log.registrar(
+        "ERROR",
+        f"Erro inesperado na execução: {type(erro).__name__}"
+    )
+
+    st.error(
+        "Ocorreu um erro interno no sistema. "
+        "O evento foi registrado nos logs."
+    )
+
+
+# =====================================
+# ENCERRAMENTO
+# =====================================
 
 finally:
 
     if conexao is not None and conexao.is_connected():
+
         conexao.close()

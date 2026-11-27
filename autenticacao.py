@@ -15,25 +15,20 @@ class Sistema:
 
         self.log = gerenciador_log
 
-
     # =================================
     # REGISTRO DE LOG
     # =================================
 
     def registrar(self, nivel, mensagem):
 
-        # Log local atual
+        # O GerenciadorLog envia para:
+        # 1. Arquivo local
+        # 2. AWS CloudWatch
+
         self.log.registrar(
             nivel,
             mensagem
         )
-
-        # FUTURA INTEGRAÇÃO:
-        # Enviar o evento ao AWS CloudWatch
-        #
-        # Exemplo futuro:
-        # self.registrar_cloudwatch(nivel, mensagem)
-
 
     # =================================
     # AUTENTICAÇÃO
@@ -58,7 +53,6 @@ class Sistema:
 
             dados_usuario = cursor.fetchone()
 
-
             # USUÁRIO NÃO ENCONTRADO
 
             if dados_usuario is None:
@@ -70,9 +64,7 @@ class Sistema:
 
                 return False
 
-
             nome_usuario, senha_hash, perfil, status = dados_usuario
-
 
             # USUÁRIO INATIVO
 
@@ -85,7 +77,6 @@ class Sistema:
 
                 return False
 
-
             # VALIDAR SENHA
 
             senha_hash_bytes = senha_hash.encode("utf-8")
@@ -95,13 +86,10 @@ class Sistema:
                 senha_hash_bytes
             ):
 
-
-                # LOGIN
+                # LOGIN BEM-SUCEDIDO
 
                 st.session_state.logado = True
-
                 st.session_state.usuario = nome_usuario
-
 
                 # PERFIL
 
@@ -117,14 +105,18 @@ class Sistema:
 
                     st.session_state.perfil = "engenheiro"
 
+                # REGISTRAR LOGIN
 
                 self.registrar(
                     "INFO",
-                    f"Login realizado com sucesso - usuário: {usuario}"
+                    (
+                        f"Login realizado com sucesso - "
+                        f"usuário: {nome_usuario} - "
+                        f"perfil: {perfil}"
+                    )
                 )
 
                 return True
-
 
             # SENHA INCORRETA
 
@@ -136,7 +128,6 @@ class Sistema:
                 )
 
                 return False
-
 
         except Exception as erro:
 
@@ -150,7 +141,6 @@ class Sistema:
             )
 
             return False
-
 
         finally:
 
@@ -190,7 +180,6 @@ def ler_logs_local(nome_arquivo):
             columns=["data", "nivel", "mensagem"]
         )
 
-
     with open(
         nome_arquivo,
         "r",
@@ -211,6 +200,5 @@ def ler_logs_local(nome_arquivo):
                         "mensagem": partes[2]
                     }
                 )
-
 
     return pd.DataFrame(dados)
