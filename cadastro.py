@@ -2,6 +2,7 @@
 import streamlit as st
 import mysql.connector
 import bcrypt
+from getpass import getpass
 
 # ========================
 # CONFIGURAÇÃO
@@ -37,8 +38,7 @@ def criar_admin_inicial():
     conexao = conectar_banco()
     cursor = conexao.cursor()
 
-    usuario = "Administrador"
-    senha = "admin123"
+    usuario = "admin"
 
     cursor.execute(
         "SELECT id FROM usuarios WHERE usuario = %s",
@@ -47,36 +47,55 @@ def criar_admin_inicial():
 
     if cursor.fetchone() is None:
 
-        senha_hash = bcrypt.hashpw(
-            senha.encode("utf-8"),
-            bcrypt.gensalt()
-        )
+        print("\n===== CONFIGURAÇÃO DO ADMINISTRADOR =====")
 
-        cursor.execute(
-            """
-            INSERT INTO usuarios
-            (usuario, senha_hash, tipo_usuario)
-            VALUES (%s, %s, %s)
-            """,
-            (
-                usuario,
-                senha_hash.decode("utf-8"),
-                "Administrador"
+        senha = getpass("Digite a senha do administrador: ")
+        confirmar_senha = getpass("Confirme a senha: ")
+
+        if not senha:
+            print("A senha não pode ser vazia.")
+
+        elif senha != confirmar_senha:
+            print("As senhas não coincidem.")
+
+        else:
+
+            senha_hash = bcrypt.hashpw(
+                senha.encode("utf-8"),
+                bcrypt.gensalt()
             )
-        )
 
-        conexao.commit()
+            cursor.execute(
+                """
+                INSERT INTO usuarios
+                (usuario, senha_hash, tipo_usuario)
+                VALUES (%s, %s, %s)
+                """,
+                (
+                    usuario,
+                    senha_hash.decode("utf-8"),
+                    "Administrador"
+                )
+            )
+
+            conexao.commit()
+
+            print("Administrador criado com sucesso!")
+
+    else:
+
+        print("Administrador já cadastrado.")
 
     cursor.close()
     conexao.close()
 
-
-# Executa a criação na inicialização
+# Executa a criação do administrador
 criar_admin_inicial()
 
 # ========================
 # CADASTRO
 # ========================
+
 def cadastrar_usuario(usuario, senha, tipo_usuario):
 
     conexao = None

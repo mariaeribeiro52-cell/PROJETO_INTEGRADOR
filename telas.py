@@ -1,42 +1,38 @@
+
 import streamlit as st
-from autenticacao import autenticar, ler_logs_local
 import pandas as pd
 import random
-import time
+import bcrypt
+
 from datetime import datetime
+from autenticacao import ler_logs_local
+
+
 # =====================================
 # TELA DE LOGIN
 # =====================================
-def tela_login(log):
 
-    st.title(
-        "🔐 Sistema Supervisório"
-    )
+def tela_login(sistema, conexao):
 
-    st.subheader(
-        "Autenticação"
-    )
+    st.title("🔐 Sistema Supervisório")
 
+    st.subheader("Autenticação")
 
-    usuario = st.text_input(
-        "Usuário"
-    )
-
+    usuario = st.text_input("Usuário")
 
     senha = st.text_input(
         "Senha",
         type="password"
     )
 
+    if st.button("Entrar"):
 
-    if st.button(
-        "Entrar"
-    ):
-        if autenticar(
+        if sistema.autenticar(
             usuario,
             senha,
-            log
+            conexao
         ):
+
             st.rerun()
 
         else:
@@ -46,143 +42,103 @@ def tela_login(log):
             )
 
 
-    st.divider()
-
-    st.write(
-        "Usuários para teste:"
-    )
-
-    st.code(
-        """
-admin / admin123
-
-operador / operador123
-        """
-    )
-
 # =====================================
-# TELA DO PROCESSO
+# MONITORAMENTO DE TEMPERATURA
 # =====================================
+
 @st.fragment(run_every=3)
 def monitorar_temperatura():
-    # Simular valor de temperatura:
-    temp = random.uniform(40,50)
-    # Adicionar ao historico do streamlit:
+
+    temperatura = random.uniform(40, 50)
+
     st.session_state.leituras.append(
         {
-            "Horários" : datetime.now().strftime("%H:%M:%S"),
-            "Temperatura" : temp
+            "Horários": datetime.now().strftime("%H:%M:%S"),
+            "Temperatura": temperatura
         }
     )
+
     st.session_state.leituras = (
         st.session_state.leituras[-20:]
     )
-    st.metric("Temperatura Atual",
-             f"{temp:.2f}°C")
-    #Grafico:
-    st.scatter_chart(
+
+    st.metric(
+        "Temperatura Atual",
+        f"{temperatura:.2f} °C"
+    )
+
+    st.line_chart(
         st.session_state.leituras,
         x="Horários",
         y="Temperatura"
     )
 
 
+# =====================================
+# TELA DO PROCESSO
+# =====================================
 
-def tela_processo(log):
+def tela_processo(sistema):
 
-    st.title(
-        "⚙️ Controle do Processo"
-    )
-
-
-    st.write(
-        f"Usuário: "
-        f"**{st.session_state.usuario}**"
-    )
-
+    st.title("⚙️ Controle do Processo")
 
     st.write(
-        f"Perfil: "
-        f"**{st.session_state.perfil}**"
+        f"Usuário: **{st.session_state.usuario}**"
     )
 
+    st.write(
+        f"Perfil: **{st.session_state.perfil}**"
+    )
 
     st.divider()
 
+    st.subheader("Motor 01")
 
-    # =================================
+
     # STATUS
-    # =================================
-
-    st.subheader(
-        "Motor 01"
-    )
-
 
     if st.session_state.motor_ligado:
 
-        st.success(
-            "Motor ligado"
-        )
+        st.success("Motor ligado")
 
     else:
 
-        st.error(
-            "Motor desligado"
-        )
+        st.error("Motor desligado")
 
 
     col1, col2 = st.columns(2)
 
 
-    # =================================
     # LIGAR MOTOR
-    # =================================
 
     with col1:
 
-        if st.button(
-            "🟢 Ligar Motor"
-        ):
+        if st.button("🟢 Ligar Motor"):
 
             st.session_state.motor_ligado = True
 
-
-            log.registrar(
+            sistema.registrar(
                 "INFO",
-                (
-                    f"{st.session_state.usuario} "
-                    f"ligou Motor 01"
-                )
+                f"{st.session_state.usuario} ligou Motor 01"
             )
-
 
             st.rerun()
 
 
-    # =================================
     # DESLIGAR MOTOR
-    # =================================
 
     with col2:
 
-        if st.button(
-            "🔴 Desligar Motor"
-        ):
+        if st.button("🔴 Desligar Motor"):
 
             st.session_state.motor_ligado = False
 
             st.session_state.velocidade = 0
 
-
-            log.registrar(
+            sistema.registrar(
                 "INFO",
-                (
-                    f"{st.session_state.usuario} "
-                    f"desligou Motor 01"
-                )
+                f"{st.session_state.usuario} desligou Motor 01"
             )
-
 
             st.rerun()
 
@@ -190,9 +146,7 @@ def tela_processo(log):
     st.divider()
 
 
-    # =================================
     # VELOCIDADE
-    # =================================
 
     velocidade = st.slider(
         "Velocidade do Motor",
@@ -202,46 +156,28 @@ def tela_processo(log):
         step=100
     )
 
-
-    if st.button(
-        "Aplicar velocidade"
-    ):
+    if st.button("Aplicar velocidade"):
 
         if not st.session_state.motor_ligado:
 
-            st.warning(
-                "O motor está desligado."
-            )
+            st.warning("O motor está desligado.")
 
-            log.registrar(
+            sistema.registrar(
                 "WARNING",
-                (
-                    f"{st.session_state.usuario} "
-                    f"tentou alterar a velocidade "
-                    f"com o motor desligado"
-                )
+                f"{st.session_state.usuario} tentou alterar a velocidade com o motor desligado"
             )
 
         else:
 
-            st.session_state.velocidade = (
-                velocidade
-            )
+            st.session_state.velocidade = velocidade
 
-
-            log.registrar(
+            sistema.registrar(
                 "INFO",
-                (
-                    f"{st.session_state.usuario} "
-                    f"alterou Motor 01 para "
-                    f"{velocidade} RPM"
-                )
+                f"{st.session_state.usuario} alterou Motor 01 para {velocidade} RPM"
             )
-
 
             st.success(
-                f"Velocidade alterada para "
-                f"{velocidade} RPM"
+                f"Velocidade alterada para {velocidade} RPM"
             )
 
 
@@ -249,89 +185,396 @@ def tela_processo(log):
         "Velocidade atual",
         f"{st.session_state.velocidade} RPM"
     )
+
     st.divider()
-    st.subheader("Monitoramento de Temperatura")
+
+    st.subheader("Temperatura do Processo")
+
     monitorar_temperatura()
 
+
 # =====================================
-# TELA DO MONITORAMENTO DE LOG
+# TELA DE GRÁFICOS
 # =====================================
-def tela_monitoramento(log, arquivo):
-    # Verificação de usuário:
-    if st.session_state.perfil != "admin":
-        st.error("Acesso não autorizado")
-        log.registrar("WARNING",
-        f"Tentativa de acesso não autorizado ao Monitoramento - usuário: {st.session_state.usuario}")
+
+def tela_graficos():
+
+    st.title("📊 Gráficos do Processo")
+
+    st.subheader("Histórico de Temperatura")
+
+    leituras = st.session_state.leituras
+
+    if not leituras:
+
+        st.info(
+            "Ainda não existem leituras disponíveis. "
+            "Acesse a tela Processo para iniciar o monitoramento."
+        )
+
     else:
-        st.title("🛡️ Monitoramento")
-        st.write("Monitoramento de eventos de segurança")
-        logs = ler_logs_local(arquivo)
-        st.divider()
-        if logs.empty:
-            st.info("Nenhum Evento encontrado")
+
+        df = pd.DataFrame(leituras)
+
+        st.line_chart(
+            df,
+            x="Horários",
+            y="Temperatura"
+        )
+
+        st.metric(
+            "Temperatura média",
+            f"{df['Temperatura'].mean():.2f} °C"
+        )
+
+        st.metric(
+            "Temperatura máxima",
+            f"{df['Temperatura'].max():.2f} °C"
+        )
+
+        st.metric(
+            "Temperatura mínima",
+            f"{df['Temperatura'].min():.2f} °C"
+        )
+
+        st.dataframe(
+            df,
+            use_container_width=True
+        )
+
+
+# =====================================
+# MONITORAMENTO DE SEGURANÇA
+# =====================================
+
+def tela_monitoramento(sistema, arquivo):
+
+    # ADMINISTRADOR E ENGENHEIRO
+
+    if st.session_state.perfil not in [
+        "admin",
+        "engenheiro"
+    ]:
+
+        st.error("Acesso não autorizado.")
+
+        sistema.registrar(
+            "WARNING",
+            f"Tentativa de acesso não autorizado ao monitoramento - usuário: {st.session_state.usuario}"
+        )
+
+        return
+
+
+    st.title("🛡️ Monitoramento")
+
+    st.write(
+        "Monitoramento de eventos de segurança"
+    )
+
+    logs = ler_logs_local(arquivo)
+
+    st.divider()
+
+
+    if logs.empty:
+
+        st.info("Nenhum evento encontrado.")
+
+        return
+
+
+    # INDICADORES
+
+    total_logs = len(logs)
+
+    total_info = (logs["nivel"] == "INFO").sum()
+
+    total_warn = (logs["nivel"] == "WARNING").sum()
+
+    total_erro = (logs["nivel"] == "ERROR").sum()
+
+    total_crit = (logs["nivel"] == "CRITICAL").sum()
+
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        st.metric("Eventos", total_logs)
+
+    with col2:
+        st.metric("INFO", total_info)
+
+    with col3:
+        st.metric("WARNING", total_warn)
+
+    with col4:
+        st.metric("ERROR", total_erro)
+
+    with col5:
+        st.metric("CRITICAL", total_crit)
+
+
+    st.divider()
+
+
+    # ANÁLISE DE LOGIN
+
+    minutos = st.number_input(
+        "Período de análise em minutos",
+        min_value=1,
+        value=60
+    )
+
+    inicio = pd.Timestamp.now() - pd.Timedelta(
+        minutes=minutos
+    )
+
+
+    mask = (
+        (pd.to_datetime(logs["data"]) >= inicio)
+        &
+        (
+            logs["mensagem"]
+            .astype(str)
+            .str.contains(
+                "Tentativa de login inválida",
+                na=False,
+                case=False,
+                regex=False
+            )
+        )
+    )
+
+    tentativas_invalidas = mask.sum()
+
+
+    st.subheader("Análise de Segurança")
+
+    st.write(
+        f"Tentativas inválidas: {tentativas_invalidas}"
+    )
+
+
+    if tentativas_invalidas >= 3:
+
+        st.error(
+            "🚨 ALERTA: Possível ataque de força bruta!"
+        )
+
+    else:
+
+        st.success(
+            "Nenhum ataque de força bruta identificado."
+        )
+
+
+    # GRÁFICO DE LOGS
+
+    st.subheader("Eventos por nível")
+
+    st.bar_chart(
+        logs["nivel"].value_counts()
+    )
+
+
+    # TABELA
+
+    logs = logs.sort_values(
+        "data",
+        ascending=False
+    )
+
+    st.subheader("Eventos registrados")
+
+    filtro = st.selectbox(
+        "Filtro por nível",
+        [
+            "Todos",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL"
+        ]
+    )
+
+    if filtro != "Todos":
+
+        logs = logs[
+            logs["nivel"] == filtro
+        ]
+
+    st.dataframe(
+        logs,
+        use_container_width=True
+    )
+
+
+# =====================================
+# CADASTRAR USUÁRIO
+# =====================================
+
+def cadastrar_usuario(conexao, usuario, senha, tipo_usuario):
+
+    cursor = None
+
+    try:
+
+        cursor = conexao.cursor()
+
+
+        # VERIFICAR DUPLICIDADE
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM usuarios
+            WHERE usuario = %s
+            """,
+            (usuario,)
+        )
+
+        if cursor.fetchone():
+
+            return False, "Usuário já cadastrado."
+
+
+        # HASH DA SENHA
+
+        senha_hash = bcrypt.hashpw(
+    senha.encode("utf-8"),
+    bcrypt.gensalt()
+).decode("utf-8")
+
+        # INSERT
+
+        cursor.execute(
+            """
+            INSERT INTO usuarios
+            (usuario, senha_hash, tipo_usuario)
+            VALUES (%s, %s, %s)
+            """,
+            (
+                usuario,
+                senha_hash,
+                tipo_usuario
+            )
+        )
+
+        conexao.commit()
+
+        return True, "Usuário cadastrado com sucesso!"
+
+
+    except Exception as erro:
+
+        conexao.rollback()
+
+        return False, f"Erro ao cadastrar usuário: {erro}"
+
+
+    finally:
+
+        if cursor:
+            cursor.close()
+
+
+# =====================================
+# TELA DE CADASTRO DE USUÁRIOS
+# =====================================
+
+def tela_cadastro(sistema, conexao):
+
+    # APENAS ADMINISTRADOR
+
+    if st.session_state.perfil != "admin":
+
+        st.error("Acesso não autorizado.")
+
+        sistema.registrar(
+            "WARNING",
+            f"Tentativa de acesso ao cadastro de usuários - usuário: {st.session_state.usuario}"
+        )
+
+        return
+
+
+    st.title("👤 Cadastro de Usuários")
+
+    st.subheader("Cadastrar novo usuário")
+
+    st.divider()
+
+
+    # FORMULÁRIO
+
+    with st.form("form_cadastro_usuario"):
+
+        usuario = st.text_input(
+            "Nome de usuário"
+        )
+
+        senha = st.text_input(
+            "Senha",
+            type="password"
+        )
+
+        confirmar_senha = st.text_input(
+            "Confirmar senha",
+            type="password"
+        )
+
+        tipo_usuario = st.selectbox(
+            "Tipo de usuário",
+            [
+                "Administrador",
+                "Operador",
+                "Engenheiro"
+            ]
+        )
+
+        cadastrar = st.form_submit_button(
+            "Cadastrar usuário",
+            use_container_width=True
+        )
+
+
+    # VALIDAÇÕES
+
+    if cadastrar:
+
+        if not usuario.strip() or not senha or not confirmar_senha:
+
+            st.error("Preencha todos os campos.")
+
+        elif senha != confirmar_senha:
+
+            st.error("As senhas não coincidem.")
+
         else:
-            total_logs = len(logs)
-            total_info = (logs['nivel']=="INFO").sum()
-            total_warn = (logs['nivel']=="WARNING").sum()
-            total_erro = (logs['nivel']=="ERROR").sum()
-            total_crit = (logs['nivel']=="CRITICAL").sum()
-            col1, col2, col3, col4, col5 = st.columns(5)
-            with col1:
-                st.metric("Eventos", total_logs)
-            with col2:
-                st.metric("INFO", total_info)
-            with col3:
-                st.metric("WARNING", total_warn)
-            with col4:
-                st.metric("ERROR", total_erro)
-            with col5:
-                st.metric("CRITICAL", total_crit)
-            st.divider()
-            minutos = st.text_input("Tempo para análise",
-                                    value="60")
-            inicio = pd.Timestamp.now() - pd.Timedelta(
-                                    minutes = int(minutos))
-            mask = (
-                (pd.to_datetime(logs['data']) >= inicio) 
-                &
-                (logs['mensagem']
-                        .astype(str)
-                        .str.contains("Tentativa de login inválida",
-                                    na=False,
-                                    case=False,
-                                    regex=False))
+
+            sucesso, mensagem = cadastrar_usuario(
+                conexao,
+                usuario.strip(),
+                senha,
+                tipo_usuario
             )
-            tentativas_invalidas = (mask.sum())
-            st.subheader("Análise de Segurança")
-            st.write(f"Tentativas inválidas: {tentativas_invalidas}")
-            
-            if tentativas_invalidas>=3:
-                st.error("🚨 ALERTA: Possível ataque de força bruta!")
-            else:
-                st.success("Nenhum ataque de força bruta!")
-            
-            # Gráfico dos eventos:
-            st.bar_chart(logs['nivel'].value_counts())
 
-            
-            #st.write(inicio)
-            #st.write(pd.to_datetime(logs['data']).dtype)
 
-            logs = logs.sort_index(ascending=False)
-            st.subheader("Eventos Registrados:")
-            filtro = st.selectbox(
-                "Filtro por nível:",
-                [
-                    "Todos",
+            if sucesso:
+
+                st.success(mensagem)
+
+                sistema.registrar(
                     "INFO",
-                    "WARNING",
-                    "ERROR",
-                    "CRITICAL"
-                ]
-            )
-            if filtro == "Todos":
-                logs = logs
+                    f"{st.session_state.usuario} cadastrou o usuário {usuario.strip()} - Perfil: {tipo_usuario}"
+                )
+
             else:
-                mask = logs['nivel'] == filtro
-                logs=logs[mask]
-            st.dataframe(logs)
+
+                st.error(mensagem)
+
+                sistema.registrar(
+                    "WARNING",
+                    f"Falha ao cadastrar usuário {usuario.strip()} - {mensagem}"
+                )

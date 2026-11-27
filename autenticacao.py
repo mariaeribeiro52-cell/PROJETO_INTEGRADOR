@@ -1,78 +1,172 @@
+
 import streamlit as st
 import pandas as pd
 import bcrypt
 import os
 
+
 # =====================================
-# AUTENTICAÇÃO
+# CLASSE SISTEMA
 # =====================================
 
-def autenticar(
-    usuario,
-    senha,
-    log
-):
+class Sistema:
 
-    # Verifica se o usuário existe
-    if usuario not in st.session_state.usuarios:
+    def __init__(self, gerenciador_log):
 
-        log.registrar(
-            "WARNING",
-            f"Tentativa de login inválida - "
-            f"usuário: {usuario}"
+        self.log = gerenciador_log
+
+
+    # =================================
+    # REGISTRO DE LOG
+    # =================================
+
+    def registrar(self, nivel, mensagem):
+
+        # Log local atual
+        self.log.registrar(
+            nivel,
+            mensagem
         )
 
-        return False
+        # FUTURA INTEGRAÇÃO:
+        # Enviar o evento ao AWS CloudWatch
+        #
+        # Exemplo futuro:
+        # self.registrar_cloudwatch(nivel, mensagem)
 
 
-    dados_usuario = (
-        st.session_state.usuarios[
-            usuario
-        ]
-    )
+    # =================================
+    # AUTENTICAÇÃO
+    # =================================
+
+    def autenticar(self, usuario, senha, conexao):
+
+        cursor = None
+
+        try:
+
+            cursor = conexao.cursor()
+
+            cursor.execute(
+                """
+                SELECT usuario, senha_hash, tipo_usuario, status
+                FROM usuarios
+                WHERE usuario = %s
+                """,
+                (usuario,)
+            )
+
+            dados_usuario = cursor.fetchone()
 
 
-    # Verifica a senha
-    if bcrypt.checkpw(
-        senha.encode(),
-        dados_usuario["senha_hash"]
-    ):
+            # USUÁRIO NÃO ENCONTRADO
 
-        st.session_state.logado = True
+            if dados_usuario is None:
 
-        st.session_state.usuario = usuario
+                self.registrar(
+                    "WARNING",
+                    f"Tentativa de login inválida - usuário: {usuario}"
+                )
 
-        st.session_state.perfil = (
-            dados_usuario["perfil"]
-        )
+                return False
 
 
-        log.registrar(
-            "INFO",
-            f"Login realizado - "
-            f"usuário: {usuario}"
-        )
-
-        return True
+            nome_usuario, senha_hash, perfil, status = dados_usuario
 
 
-    else:
+            # USUÁRIO INATIVO
 
-        log.registrar(
-            "WARNING",
-            f"Tentativa de login inválida - "
-            f"usuário: {usuario}"
-        )
+            if not status:
 
-        return False
+                self.registrar(
+                    "WARNING",
+                    f"Tentativa de login em usuário inativo - usuário: {usuario}"
+                )
 
-def logout(log):
+                return False
 
-    log.registrar(
+
+            # VALIDAR SENHA
+
+            senha_hash_bytes = senha_hash.encode("utf-8")
+
+            if bcrypt.checkpw(
+                senha.encode("utf-8"),
+                senha_hash_bytes
+            ):
+
+
+                # LOGIN
+
+                st.session_state.logado = True
+
+                st.session_state.usuario = nome_usuario
+
+
+                # PERFIL
+
+                if perfil == "Administrador":
+
+                    st.session_state.perfil = "admin"
+
+                elif perfil == "Operador":
+
+                    st.session_state.perfil = "operador"
+
+                elif perfil == "Engenheiro":
+
+                    st.session_state.perfil = "engenheiro"
+
+
+                self.registrar(
+                    "INFO",
+                    f"Login realizado com sucesso - usuário: {usuario}"
+                )
+
+                return True
+
+
+            # SENHA INCORRETA
+
+            else:
+
+                self.registrar(
+                    "WARNING",
+                    f"Tentativa de login inválida - usuário: {usuario}"
+                )
+
+                return False
+
+
+        except Exception as erro:
+
+            self.registrar(
+                "ERROR",
+                f"Erro durante autenticação: {erro}"
+            )
+
+            st.error(
+                "Erro ao realizar autenticação."
+            )
+
+            return False
+
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+
+# =====================================
+# LOGOUT
+# =====================================
+
+def logout(sistema):
+
+    sistema.registrar(
         "INFO",
-        f"Logout realizado - "
-        f"usuário: "
-        f"{st.session_state.usuario}"
+        f"Logout realizado - usuário: {st.session_state.usuario}"
     )
 
     st.session_state.logado = False
@@ -81,25 +175,42 @@ def logout(log):
 
     st.rerun()
 
+
+# =====================================
+# LEITURA DOS LOGS
+# =====================================
+
 def ler_logs_local(nome_arquivo):
+
     dados = []
+
     if not os.path.exists(nome_arquivo):
-        data = pd.DataFrame(columns=["data", "nível", "mensagem"])
-        return data
-    else:
-        with open(
-            nome_arquivo,
-            'r',
-            encoding='utf-8',
-            errors="replace"
-        ) as arquivo:
-            for linha in arquivo:
-                partes = linha.strip().split(" - ", 2)
-                if len(partes) == 3:
-                    dados.append({
-                        "data" : partes[0],
-                        "nivel" : partes[1],
-                        "mensagem" : partes[2]
-                    })
-            data = pd.DataFrame(dados)
-            return data
+
+        return pd.DataFrame(
+            columns=["data", "nivel", "mensagem"]
+        )
+
+
+    with open(
+        nome_arquivo,
+        "r",
+        encoding="utf-8",
+        errors="replace"
+    ) as arquivo:
+
+        for linha in arquivo:
+
+            partes = linha.strip().split(" - ", 2)
+
+            if len(partes) == 3:
+
+                dados.append(
+                    {
+                        "data": partes[0],
+                        "nivel": partes[1],
+                        "mensagem": partes[2]
+                    }
+                )
+
+
+    return pd.DataFrame(dados)
