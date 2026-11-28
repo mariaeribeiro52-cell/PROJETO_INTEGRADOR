@@ -10,17 +10,19 @@ import bcrypt
 
 from classe_gerenciador import GerenciadorLog
 from autenticacao import Sistema, logout
+
 from telas import (
     tela_login,
-    tela_processo,
     tela_graficos,
     tela_monitoramento,
     tela_cadastro
 )
 
+from tela_processos import tela_processo
+
 
 # =====================================
-# CONFIGURAÇÕES
+# CONFIGURACOES
 # =====================================
 
 st.set_page_config(
@@ -51,7 +53,7 @@ sistema = Sistema(log)
 
 
 # =====================================
-# VARIÁVEIS DE SESSÃO
+# VARIAVEIS DE SESSAO
 # =====================================
 
 if "logado" not in st.session_state:
@@ -74,13 +76,8 @@ if "leituras" not in st.session_state:
 
 
 # =====================================
-# REGISTRO DE INICIALIZAÇÃO
+# REGISTRO DE INICIALIZACAO
 # =====================================
-
-# O Streamlit executa novamente o app
-# em determinadas interações.
-# Registramos a inicialização apenas uma
-# vez por sessão do usuário.
 
 if "inicio_registrado" not in st.session_state:
 
@@ -93,7 +90,7 @@ if "inicio_registrado" not in st.session_state:
 
 
 # =====================================
-# CONEXÃO COM MYSQL
+# CONEXAO COM MYSQL
 # =====================================
 
 def conectar_banco():
@@ -105,9 +102,6 @@ def conectar_banco():
         database=os.getenv("MYSQL_DATABASE")
     )
 
-    # Evita repetir a mensagem de conexão
-    # em todos os reruns do Streamlit.
-
     if not st.session_state.get(
         "mysql_conexao_registrada",
         False
@@ -115,7 +109,7 @@ def conectar_banco():
 
         log.registrar(
             "INFO",
-            "Primeira conexão com MySQL da sessão estabelecida."
+            "Conexão com MySQL estabelecida."
         )
 
         st.session_state.mysql_conexao_registrada = True
@@ -156,12 +150,14 @@ def verificar_admin_inicial(conexao):
     usuario = input("Usuário administrador: ").strip()
 
     while not usuario:
+
         print("Usuário não pode ser vazio.")
         usuario = input("Usuário administrador: ").strip()
 
     senha = input("Senha: ")
 
     while not senha:
+
         print("Senha não pode ser vazia.")
         senha = input("Senha: ")
 
@@ -198,8 +194,6 @@ def verificar_admin_inicial(conexao):
     conexao.commit()
     cursor.close()
 
-    # Registro local e CloudWatch
-
     log.registrar(
         "INFO",
         f"Administrador inicial criado - usuário: {usuario}"
@@ -210,7 +204,7 @@ def verificar_admin_inicial(conexao):
 
 
 # =====================================
-# EXECUÇÃO DO SISTEMA
+# EXECUCAO DO SISTEMA
 # =====================================
 
 conexao = None
@@ -219,13 +213,9 @@ try:
 
     conexao = conectar_banco()
 
-    # Verifica o administrador inicial
     verificar_admin_inicial(conexao)
 
-
-    # =================================
     # LOGIN
-    # =================================
 
     if not st.session_state.logado:
 
@@ -234,10 +224,7 @@ try:
             conexao
         )
 
-
-    # =================================
-    # USUÁRIO LOGADO
-    # =================================
+    # USUARIO LOGADO
 
     else:
 
@@ -251,10 +238,7 @@ try:
 
         st.sidebar.divider()
 
-
-        # =================================
         # ADMINISTRADOR
-        # =================================
 
         if st.session_state.perfil == "admin":
 
@@ -265,10 +249,7 @@ try:
                 "Cadastro de usuários"
             ]
 
-
-        # =================================
         # OPERADOR
-        # =================================
 
         elif st.session_state.perfil == "operador":
 
@@ -277,10 +258,7 @@ try:
                 "Gráficos"
             ]
 
-
-        # =================================
         # ENGENHEIRO
-        # =================================
 
         elif st.session_state.perfil == "engenheiro":
 
@@ -290,15 +268,11 @@ try:
                 "Monitoramento"
             ]
 
-
         else:
 
             telas_disponiveis = []
 
-
-        # =================================
-        # NAVEGAÇÃO
-        # =================================
+        # NAVEGACAO
 
         if telas_disponiveis:
 
@@ -309,32 +283,21 @@ try:
 
             st.sidebar.divider()
 
-
-            # =================================
             # LOGOUT
-            # =================================
 
             if st.sidebar.button("Sair"):
 
-                # O próprio logout registra o evento
-                # por meio do GerenciadorLog.
-
                 logout(sistema)
 
-
-            # =================================
             # CONTROLE DAS TELAS
-            # =================================
 
             if tela == "Processo":
 
                 tela_processo(sistema)
 
-
             elif tela == "Gráficos":
 
                 tela_graficos()
-
 
             elif tela == "Monitoramento":
 
@@ -342,7 +305,6 @@ try:
                     sistema,
                     ARQUIVO_LOG
                 )
-
 
             elif tela == "Cadastro de usuários":
 
@@ -358,15 +320,11 @@ try:
             )
 
 
-# =====================================
-# TRATAMENTO DE ERROS
-# =====================================
-
 except mysql.connector.Error as erro:
 
     log.registrar(
         "ERROR",
-        f"Falha na conexão ou operação MySQL: {type(erro).__name__}"
+        f"Falha no MySQL: {type(erro).__name__}"
     )
 
     st.error(
@@ -378,18 +336,13 @@ except Exception as erro:
 
     log.registrar(
         "ERROR",
-        f"Erro inesperado na execução: {type(erro).__name__}"
+        f"Erro inesperado na aplicação: {type(erro).__name__}"
     )
 
     st.error(
-        "Ocorreu um erro interno no sistema. "
-        "O evento foi registrado nos logs."
+        "Ocorreu um erro interno no sistema."
     )
 
-
-# =====================================
-# ENCERRAMENTO
-# =====================================
 
 finally:
 

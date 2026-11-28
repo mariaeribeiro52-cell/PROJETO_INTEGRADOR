@@ -1,78 +1,32 @@
 
-from classe_OPC import Coneccao_Opc
+from classe_OPC import (
+    Coneccao_Opc,
+    URL_OPC,
+    NODES_OPC
+)
 
-
-# =====================================
-# CONFIGURAÇÃO OPC UA
-# =====================================
-
-URL_OPC = "opc.tcp://127.0.0.1:4843"
-
-
-# =====================================
-# VARIÁVEIS DO OPEN INDUSTRY
-# =====================================
-
-VARIAVEIS = {
-
-    "Start": "ns=1;s=Main.Start",
-
-    "Sensor": "ns=1;s=Main.Sensor",
-
-    "Motor": "ns=1;s=Main.Motor",
-
-    "Velocidade": "ns=1;s=Main.Velocidade"
-
-}
-
-
-# =====================================
-# CONEXÃO
-# =====================================
 
 conexao = Coneccao_Opc(URL_OPC)
 
-
-# =====================================
-# TESTE DE LEITURA
-# =====================================
-
 print("\n====================================")
-print(" TESTE DE COMUNICAÇÃO OPC UA")
+print(" TESTE DE COMUNICACAO OPC UA")
 print("====================================\n")
 
+try:
 
-falhas = []
+    dados = conexao.leitura_varios(NODES_OPC)
 
-for nome, node in VARIAVEIS.items():
-
-    try:
-
-        valor = conexao.leitura_valor(node)
+    for nome, valor in dados.items():
 
         print(f"{nome}: {valor}")
 
-    except Exception as erro:
+    print("\nComunicacao OPC UA realizada com sucesso!")
 
-        falhas.append(nome)
+except Exception as erro:
 
-        print(f"{nome}: ERRO - {erro}")
-
-
-# =====================================
-# RESULTADO
-# =====================================
+    print("\nFalha na comunicacao OPC UA:")
+    print(erro)
 
 print("\n====================================")
-
-if not falhas:
-
-    print("COMUNICAÇÃO OPC UA REALIZADA!")
-
-else:
-
-    print("FORAM ENCONTRADAS FALHAS.")
-
-    print("Variáveis com erro:", ", ".join(falhas))
-
+print(" TESTE FINALIZADO")
 print("====================================")
